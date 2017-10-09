@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+     <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <title>Search</title>
+    <link href="style.css" rel="stylesheet">
+  </head>
+  <body>
+    <h1>Search</h1>
+    <input type="text" id="searchBox" autoFocus onkeydown="keySelect(event)"/>
+    <ul id="searchResults" class="term-list hidden"></ul>
+  </body>
+    <script src="N.js" type="text/javascript"></script>
+    <script src="PYlib.js" type="text/javascript"></script>
+    <script src="jquery.min.js" type="text/javascript"></script>
+    <script type="text/javascript">
+        /******************
+        功能描述：自动补全
+        作者：samdebug
+        创建日期：2017.09.27
+        *******************/
+            
+        var reg = new RegExp("[\\u4E00-\\u9FFF]+","g"); //汉字正则
+        var chinese_short = {}, //汉字拼音首字母对象
+            chinese_full = {},  //汉字全拼音对象
+            chinese_short_array = [], //汉字拼音首字母数组
+            english = [];       //英文
+            
+        /*获取dom元素*/
+        var input = document.getElementById("searchBox"),
+            ul = document.getElementById("searchResults"),
+            inputTerms, termsArray, prefix, terms, results, sortedResults;
+
+         /*获取英文和汉字数组*/
+        for (var i=0;i<FriendNicknameList.length;i++){
+            var str = FriendNicknameList[i];
+　　        if(reg.test(str)){
+                var sub = PY.convertPYs(str);
+                chinese_short[sub[1]] = str;
+                chinese_full[sub[1]] = sub[0];
+                chinese_short_array.push(sub[1]);
+            }else{
+                english.push(str);
+            }
+        }
+
+        var search = function() {
+          results = [];
+          inputTerms = input.value.toLowerCase();
+          termsArray = inputTerms.split(' ');
+          prefix = termsArray.length === 1 ? '' : termsArray.slice(0, -1).join(' ') + ' ';
+          terms = termsArray[termsArray.length -1].toLowerCase();//关键字
+          input.seletedIndex = -1;
+
+          /*当关键字中包含中文时，直接匹配中文*/
+          if(reg.test(terms)){
+            for (var i = 0; i < FriendNicknameList.length; i++) {
+                var a = FriendNicknameList[i].toLowerCase(),
+                    t = a.indexOf(terms);
+                if (t > -1) {
+                  results.push(a);
+                }
+              }
+          }else{  
+            /*当关键字中未包含中文时*/
+            for (var i = 0; i < english.length; i++) {
+              if (english[i].toLowerCase().indexOf(terms) > -1){
+                  results.push(english[i].toLowerCase());
+              }
+            }
+            /*英文排序*/
+            results = results.sort(sortResults);
+            /*中文拼音排序*/
+            chinese_short_array = chinese_short_array.sort(sortResults);
+            for (var l = 0; l < chinese_short_array.length; l++) {
+              if (chinese_short_array[l].indexOf(terms) > -1 || chinese_full[chinese_short_array[l]].indexOf(terms) > -1){
+                  results.push(chinese_short[chinese_short_array[l]]);
+              }
+            }
+          }
+          evaluateResults();
+          setMouse();
+        };
+        
+        /*判断结果*/
+        var evaluateResults = function() {
+          if (results.length > 0 && inputTerms.length > 0 && terms.length !== 0) {
+            sortedResults = results;
+            appendResults();
+          } 
+          /*else if (inputTerms.length > 0 && terms.length !== 0) {
+            ul.innerHTML = '<li>Whoah! <strong>' 
+              + inputTerms 
+              + '</strong> is not in the index. <br><small><a href="https://google.com/search?q=' 
+              + encodeURIComponent(inputTerms) + '">Try Google?</a></small></li>';
+            
+          }*/
+          else if (inputTerms.length !== 0 && terms.length === 0) {
+            return;
+          }
+          else {
+            clearResults();
+          }
+        };
+        
+        /*排序函数*/
+        var sortResults = function (a,b) {
+          if (a.indexOf(terms) < b.indexOf(terms)) return -1;
+          if (a.indexOf(terms) > b.indexOf(terms)) return 1;
+          if (a.indexOf(terms) == b.indexOf(terms)) {
+              if (a.length > b.length) {
+                return 1;
+              }else{
+                return -1;
+              }
+          }
+          return 0;
+        }
+        
+        /*添加结果*/
+        var appendResults = function () {
+          clearResults();
+          
+          /*高亮*/
+          for (var i=0; i < sortedResults.length && i < 8; i++) {
+            var li = document.createElement("li"),
+                result = prefix 
+                  + sortedResults[i].toLowerCase().replace(terms, '<strong>' 
+                  + terms 
+                  +'</strong>');
+            
+            li.innerHTML = result;
+            li.className = "dist";
+            ul.appendChild(li);
+          }
+          
+          if ( ul.className !== "term-list") {
+            ul.className = "term-list";
+          }
+        };
+
+        /*清空结果*/
+        var clearResults = function() {
+          ul.className = "term-list hidden";
+          ul.innerHTML = '';
+        };
+
+        /* 使用键盘上下键控制li的选择*/
+        input.options = ul.childNodes;
+        input.seletedIndex = -1;
+        input.focus();
+
+        /*去除li的hover效果*/
+        function clearSelectedOptBgColor(target){
+          if (target.seletedIndex >= 0 && target.options.length){
+              for (var i=0;i<target.options.length;i++){
+                target.options[i].style.background = "";
+              }
+          }
+        }
+
+        /*li的hover效果*/
+        function setSelectedOptBgColor(target){
+          if (target.options.length){
+            target.options[target.seletedIndex].style.background = "#f2f2f2";
+          }
+        }
+
+        /*input监听onkeydown事件*/
+        function keySelect(e){
+          var key_num = e.keyCode;
+          if (key_num == 38 || key_num == 40 ) {
+              e.preventDefault(); //阻止默认事件
+          }
+        }
+
+        //键盘事件监听
+        input.onkeyup = keyEvent; //释放按钮
+        input.onkeypress = keyEvent; //按下按钮
+
+        function keyEvent (event){  
+          var event = event || window.event;
+          switch (event.keyCode)
+          {
+            case 37: //leftKeyCode
+              setSelectedOptBgColor(this);
+              break;
+            case 39: //rightKeyCode
+              setSelectedOptBgColor(this);
+              break;
+            case 38: //upKeyCode
+              clearSelectedOptBgColor(this);
+              this.seletedIndex--;
+              if (this.seletedIndex < 0){
+                this.seletedIndex = this.options.length - 1;
+              }
+              setSelectedOptBgColor(this);
+              break;
+            case 40: //downKeyCode
+              clearSelectedOptBgColor(this);
+              this.seletedIndex++;
+              if (this.seletedIndex >= this.options.length){
+                this.seletedIndex = 0;
+              }
+              setSelectedOptBgColor(this);
+              break;
+            case 13: //enterKeyCode
+              if (this.seletedIndex > -1){
+                this.value = this.options[this.seletedIndex].innerText;
+                this.seletedIndex = -1;
+                clearResults();
+              }
+              break;
+            default:
+              search();
+          }
+        };
+
+        /*鼠标事件*/
+        function setMouse(){
+          var oli=ul.getElementsByTagName('li');  
+          for(var i=0;i<oli.length;i++)  
+          {  
+            oli[i].onmouseover=(function(n){  
+                return function(){
+                    input.seletedIndex = n;
+                    clearSelectedOptBgColor(input);
+                    setSelectedOptBgColor(input);
+                }   
+            })(i) 
+
+            oli[i].onmousemove=(function(n){ 
+                return function(){
+                    input.seletedIndex = n;
+                    clearSelectedOptBgColor(input);
+                    setSelectedOptBgColor(input);
+                }   
+            })(i) 
+
+            oli[i].onmouseout=(function(n){
+                return function(){  
+                    clearSelectedOptBgColor(input);
+                }   
+            })(i)
+
+            oli[i].onclick=(function(n){  
+                return function(){  
+                    input.value = input.options[input.seletedIndex].innerText;
+                    clearResults();
+                }   
+            })(i)
+          }  
+        }
+
+        //关标离开
+        /*input.onblur = function(e){
+          clearSelectedOptBgColor(this);
+          this.seletedIndex = -1;
+          this.value = this.options[this.seletedIndex].innerText;
+          clearResults();
+        };*/
+
+    </script>
+</html>
+
